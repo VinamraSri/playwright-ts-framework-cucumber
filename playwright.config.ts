@@ -7,7 +7,7 @@ export const config = defineConfig({
   use: {
     baseURL: 'https://the-internet.herokuapp.com',
 
-    headless: false,
+    headless: true,
     launchOptions: {
       slowMo: 1000,
     },
