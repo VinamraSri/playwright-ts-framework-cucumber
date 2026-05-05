@@ -6,18 +6,22 @@
   "scripts": {
     "test": "cucumber-js",
     "test:headless": "HEADLESS=true cucumber-js",
-    "test:parallel": "cucumber-js --parallel 2"
+    "test:parallel": "cucumber-js --parallel 2",
+    "mcp:inspect": "npx @modelcontextprotocol/inspector npx ts-node mcp-claude-server.ts",
+    "mcp:ui": "node mcp-ui/server.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "devDependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "@playwright/test": "^1.59.1",
-    "@types/node": "^25.5.2"
+    "@types/node": "^25.6.0"
   },
   "dependencies": {
     "@cucumber/cucumber": "^12.7.0",
     "playwright": "^1.59.1",
-    "ts-node": "^10.9.2"
+    "ts-node": "^10.9.2",
+    "express": "^4.18.2"
   }
 }

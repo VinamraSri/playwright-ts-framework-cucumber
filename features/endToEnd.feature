@@ -1,6 +1,6 @@
-Feature: E2E Test
+Feature: End to End Tests
 
-
+@smoke @regression
 Scenario: Login and Logout
    Given I open the login page
    When I can see the login page
@@ -8,13 +8,14 @@ Scenario: Login and Logout
    Then I should see the dashboard page
    Then I click on logout button
 
+@regression
 Scenario: Dropdown Selection
    Given I open the dropdown page
    When I can see the dropdown page
    Then I select "Option 1" from the dropdown
    Then I should see "Option 1" is selected in the dropdown
 
-
+@regression
 Scenario: Add/Remove Button
    Given I open the AddRemove button page
    When I can see the AddRemove button page
@@ -23,7 +24,7 @@ Scenario: Add/Remove Button
    Then I remove the 3 delete button
    Then I can see the delete button count 0
 
-@add1
+@smoke @regression
 Scenario: Checkboxes
    Given I open the Checkbox page
    When I can see the checkbox page
@@ -32,11 +33,10 @@ Scenario: Checkboxes
    Then I can see the checkbox 1 is checked
    Then I can see the checkbox 2 is unchecked
 
-@add
+@regression
 Scenario: Dynamic Loading
    Given I open the Dynamic Loading page
    When I can see the Dynamic Loading page
    Then I click on the start button
    Then I can see the loading bar
    Then I can see the "Hello World!" text after loading is complete
-  

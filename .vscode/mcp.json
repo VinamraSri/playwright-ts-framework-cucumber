@@ -1,0 +1,9 @@
+{
+  "servers": {
+    "playwright-cucumber": {
+      "command": "npx",
+      "args": ["ts-node", "mcp-claude-server.ts"],
+      "env": {}
+    }
+  }
+}
