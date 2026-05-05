@@ -1,10 +1,22 @@
 name: Playwright Tests
 
 on:
-  push:
-    branches: [main, master]
-  pull_request:
-    branches: [main, master]
+  workflow_dispatch:
+    inputs:
+      suite:
+        description: Test suite to run
+        required: true
+        default: all
+        type: choice
+        options:
+          - all
+          - smoke
+          - regression
+          - tag
+      tag:
+        description: Cucumber tag expression, required when suite is tag
+        required: false
+        type: string
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -31,7 +43,29 @@ jobs:
         run: npx playwright install --with-deps
 
       - name: Run Cucumber Tests
-        run: npx cucumber-js
+        shell: bash
+        run: |
+          suite="${{ github.event.inputs.suite || 'all' }}"
+          tag="${{ github.event.inputs.tag || '' }}"
+
+          case "$suite" in
+            smoke)
+              npx cucumber-js --tags "@smoke"
+              ;;
+            regression)
+              npx cucumber-js --tags "@regression"
+              ;;
+            tag)
+              if [ -z "$tag" ]; then
+                echo "A tag expression is required when suite is 'tag'."
+                exit 1
+              fi
+              npx cucumber-js --tags "$tag"
+              ;;
+            *)
+              npx cucumber-js
+              ;;
+          esac
 
       - name: Upload Cucumber Report
         uses: actions/upload-artifact@v5

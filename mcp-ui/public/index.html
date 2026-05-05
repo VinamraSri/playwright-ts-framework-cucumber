@@ -3,23 +3,139 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>MCP Test Runner UI</title>
+    <title>Playwright Test Dashboard</title>
     <link rel="stylesheet" href="/style.css" />
   </head>
   <body>
-    <main>
-      <h1>MCP Test Runner</h1>
-      <div id="tools"></div>
+    <div class="app-container">
+      <!-- Sidebar -->
+      <aside class="sidebar">
+        <div class="sidebar-header">
+          <h2>Test Control</h2>
+        </div>
+        <nav class="nav-menu" id="tools"></nav>
 
-      <section>
-        <label for="tag">Run by tag (e.g., @smoke):</label>
-        <input id="tag" placeholder="@smoke" />
-        <button id="runByTag">Run Tag</button>
-      </section>
+        <div class="custom-tag-section">
+          <h3>Custom Tag</h3>
+          <input id="tag" placeholder="Enter tag (e.g., @smoke)" />
+          <button id="runByTag" class="btn btn-primary">Run Tag</button>
+        </div>
+      </aside>
 
-      <h2>Output</h2>
-      <pre id="output"></pre>
-    </main>
+      <!-- Main Content -->
+      <main class="main-content">
+        <header class="header">
+          <div class="header-content">
+            <h1>🎭 Playwright Test Dashboard</h1>
+            <div class="header-stats" id="headerStats">
+              <div class="stat-item">
+                <span class="stat-label">Total Runs</span>
+                <span class="stat-value" id="totalRuns">0</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">Last Status</span>
+                <span class="stat-value" id="lastStatus">-</span>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <!-- Dashboard Grid -->
+        <div class="dashboard-grid">
+          <!-- Test Metrics Cards -->
+          <section class="metrics-section">
+            <h2>Test Results Metrics</h2>
+            <div class="metrics-grid" id="metricsGrid">
+              <div class="metric-card passed">
+                <div class="metric-label">Passed</div>
+                <div class="metric-value" id="passCount">0</div>
+              </div>
+              <div class="metric-card failed">
+                <div class="metric-label">Failed</div>
+                <div class="metric-value" id="failCount">0</div>
+              </div>
+              <div class="metric-card skipped">
+                <div class="metric-label">Skipped</div>
+                <div class="metric-value" id="skipCount">0</div>
+              </div>
+              <div class="metric-card confidence">
+                <div class="metric-label">Release Confidence</div>
+                <div class="metric-value" id="confidence">0%</div>
+                <div class="confidence-bar">
+                  <div class="confidence-fill" id="confidenceFill"></div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- Test Overview Cards -->
+          <section class="test-overview">
+            <h2>Test Suites</h2>
+            <div class="card-grid" id="cardGrid"></div>
+          </section>
+
+          <!-- Live Progress -->
+          <section class="progress-section">
+            <div class="progress-header">
+              <h2>Workflow Dispatch</h2>
+              <span id="progressSummary">Idle</span>
+            </div>
+            <div class="progress-bar">
+              <div class="progress-fill" id="progressFill"></div>
+            </div>
+          </section>
+
+          <!-- Scenarios and Steps -->
+          <section class="scenarios-section">
+            <div class="scenarios-header">
+              <div>
+                <h2>Scenarios & Steps</h2>
+                <span id="scenarioSummary" class="scenario-summary">No scenarios loaded</span>
+              </div>
+              <div class="scenario-actions" aria-label="Scenario controls">
+                <div class="scenario-filters" id="scenarioFilters" aria-label="Filter scenarios by status">
+                  <button class="filter-chip active" type="button" data-filter="all">All</button>
+                  <button class="filter-chip" type="button" data-filter="running">Running</button>
+                  <button class="filter-chip" type="button" data-filter="passed">Passed</button>
+                  <button class="filter-chip" type="button" data-filter="failed">Failed</button>
+                  <button class="filter-chip" type="button" data-filter="skipped">Skipped</button>
+                </div>
+                <div class="scenario-expand-actions">
+                  <button id="expandScenarios" class="btn btn-small" type="button">Expand All</button>
+                  <button id="collapseScenarios" class="btn btn-small" type="button">Collapse All</button>
+                </div>
+              </div>
+            </div>
+            <div class="scenarios-container" id="scenariosContainer">
+              <p class="empty-state">Trigger GitHub Actions to see selected scenarios and steps</p>
+            </div>
+          </section>
+
+          <!-- Output Section -->
+          <section class="output-section">
+            <div class="output-header">
+              <h2>GitHub Actions Output</h2>
+              <div class="output-controls">
+                <button id="clearOutput" class="btn btn-small">Clear</button>
+                <button id="downloadOutput" class="btn btn-small">Download</button>
+              </div>
+            </div>
+            <div class="output-container">
+              <pre id="output"></pre>
+            </div>
+          </section>
+
+          <!-- Recent Runs -->
+          <section class="recent-runs">
+            <h2>Recent Execution History</h2>
+            <div class="history-list" id="historyList">
+              <p class="empty-state">No recent runs</p>
+            </div>
+          </section>
+        </div>
+      </main>
+    </div>
+
     <script src="/app.js"></script>
   </body>
 </html>

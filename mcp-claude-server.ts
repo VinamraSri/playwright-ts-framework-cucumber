@@ -63,36 +63,35 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
 server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest) => {
   try {
     const { name, arguments: args } = request.params;
-    let command: string;
-    let result: string;
+    let suite: WorkflowSuite;
+    let tag = "";
 
     switch (name) {
       case "run_smoke_tests":
-        command = 'npx cucumber-js --tags "@smoke"';
-        result = executeTests(command);
+        suite = "smoke";
         break;
 
       case "run_regression_tests":
-        command = 'npx cucumber-js --tags "@regression"';
-        result = executeTests(command);
+        suite = "regression";
         break;
 
       case "run_tests_by_tag":
         if (!args || !args.tag) {
           throw new Error("Tag parameter is required");
         }
-        command = `npx cucumber-js --tags "${args.tag}"`;
-        result = executeTests(command);
+        suite = "tag";
+        tag = String(args.tag);
         break;
 
       case "run_all_tests":
-        command = "npx cucumber-js";
-        result = executeTests(command);
+        suite = "all";
         break;
 
       default:
         throw new Error(`Unknown tool: ${name}`);
     }
+
+    const result = await dispatchGitHubWorkflow(suite, tag);
 
     return {
       content: [
@@ -115,19 +114,68 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
   }
 });
 
-function executeTests(command: string): string {
-  try {
-    console.error(`Executing: ${command}`);
-    const output = execSync(command, {
-      encoding: "utf-8",
-      stdio: ["pipe", "pipe", "pipe"],
-    });
-    return `✅ Tests executed successfully:\n\n${output}`;
-  } catch (error) {
-    const stderr = (error as any).stderr?.toString() || "";
-    const stdout = (error as any).stdout?.toString() || "";
-    return `❌ Test execution failed:\n\n${stdout}\n${stderr}`;
+type WorkflowSuite = "all" | "smoke" | "regression" | "tag";
+
+function getGitHubConfig() {
+  const token = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
+  const workflow = process.env.GITHUB_WORKFLOW_FILE || "playwright.yml";
+  const ref = process.env.GITHUB_REF_NAME || process.env.GITHUB_BRANCH || "main";
+  const repository = process.env.GITHUB_REPOSITORY || getRepositoryFromRemote();
+  const [owner, repo] = repository.split("/");
+
+  if (!token) {
+    throw new Error("GITHUB_TOKEN or GH_TOKEN is required to trigger GitHub Actions.");
   }
+
+  if (!owner || !repo) {
+    throw new Error("Unable to determine GitHub repository. Set GITHUB_REPOSITORY=owner/repo.");
+  }
+
+  return { token, owner, repo, workflow, ref };
+}
+
+function getRepositoryFromRemote(): string {
+  try {
+    const remote = execSync("git remote get-url origin", { encoding: "utf-8" }).trim();
+    const match = remote.match(/github\.com[:/](.+?)\/(.+?)(?:\.git)?$/);
+    return match ? `${match[1]}/${match[2]}` : "";
+  } catch {
+    return "";
+  }
+}
+
+async function dispatchGitHubWorkflow(suite: WorkflowSuite, tag = ""): Promise<string> {
+  const config = getGitHubConfig();
+  const url = `https://api.github.com/repos/${config.owner}/${config.repo}/actions/workflows/${config.workflow}/dispatches`;
+  const runsUrl = `https://github.com/${config.owner}/${config.repo}/actions/workflows/${config.workflow}`;
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      Accept: "application/vnd.github+json",
+      Authorization: `Bearer ${config.token}`,
+      "Content-Type": "application/json",
+      "User-Agent": "playwright-cucumber-mcp",
+      "X-GitHub-Api-Version": "2022-11-28",
+    },
+    body: JSON.stringify({
+      ref: config.ref,
+      inputs: { suite, tag },
+    }),
+  });
+
+  if (!response.ok) {
+    const details = await response.text();
+    throw new Error(`GitHub Actions dispatch failed (${response.status}): ${details}`);
+  }
+
+  return [
+    "GitHub Actions workflow dispatched.",
+    `Repository: ${config.owner}/${config.repo}`,
+    `Workflow: ${config.workflow}`,
+    `Ref: ${config.ref}`,
+    `Suite: ${suite}${tag ? ` (${tag})` : ""}`,
+    `Runs: ${runsUrl}`,
+  ].join("\n");
 }
 
 async function main() {
