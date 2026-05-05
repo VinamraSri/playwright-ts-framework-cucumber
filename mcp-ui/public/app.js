@@ -295,13 +295,13 @@ async function runTool(name, tag, cardElement) {
     }
 
     // Update status
-    const status = data.success ? 'queued' : 'failed';
+    const status = data.success ? 'success' : 'failed';
 
     if (cardElement) {
       cardElement.classList.remove('running');
       const statusEl = cardElement.querySelector('.test-card-status');
       if (statusEl) {
-        statusEl.textContent = `${getStatusIcon(status)} ${status === 'queued' ? 'Queued' : 'Failed'}`;
+        statusEl.textContent = `${getStatusIcon(status)} ${status === 'success' ? 'Passed' : 'Failed'}`;
         statusEl.className = `test-card-status ${status}`;
       }
     }
@@ -377,7 +377,7 @@ function updateStats() {
   if (executionHistory.length > 0) {
     const last = executionHistory[0];
     lastStatus.textContent = `${getStatusIcon(last.status)} ${last.status}`;
-    lastStatus.style.color = last.status === 'queued' ? 'var(--primary)' : 'var(--danger)';
+    lastStatus.style.color = last.status === 'success' ? 'var(--success)' : 'var(--danger)';
   } else {
     lastStatus.textContent = '-';
     lastStatus.style.color = 'var(--text-secondary)';

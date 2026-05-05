@@ -1,6 +1,7 @@
 const express = require('express');
-const { execSync } = require('child_process');
+const { execFileSync, execSync } = require('child_process');
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 
 const app = express();
@@ -58,17 +59,42 @@ function getGitHubConfig() {
   return { token, owner, repo, workflow, ref };
 }
 
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function githubHeaders(config, extra = {}) {
+  return {
+    Accept: 'application/vnd.github+json',
+    Authorization: `Bearer ${config.token}`,
+    'User-Agent': 'playwright-cucumber-mcp-ui',
+    'X-GitHub-Api-Version': '2022-11-28',
+    ...extra,
+  };
+}
+
+async function githubJson(config, url, options = {}) {
+  const response = await fetch(url, {
+    ...options,
+    headers: githubHeaders(config, options.headers),
+  });
+
+  if (!response.ok) {
+    const details = await response.text();
+    throw new Error(`GitHub API request failed (${response.status}): ${details}`);
+  }
+
+  return response.json();
+}
+
 async function dispatchGitHubWorkflow(suite, tag = '') {
   const config = getGitHubConfig();
+  const dispatchedAt = new Date();
   const response = await fetch(`https://api.github.com/repos/${config.owner}/${config.repo}/actions/workflows/${config.workflow}/dispatches`, {
     method: 'POST',
-    headers: {
-      Accept: 'application/vnd.github+json',
-      Authorization: `Bearer ${config.token}`,
+    headers: githubHeaders(config, {
       'Content-Type': 'application/json',
-      'User-Agent': 'playwright-cucumber-mcp-ui',
-      'X-GitHub-Api-Version': '2022-11-28',
-    },
+    }),
     body: JSON.stringify({
       ref: config.ref,
       inputs: { suite, tag },
@@ -89,7 +115,171 @@ async function dispatchGitHubWorkflow(suite, tag = '') {
       `Suite: ${suite}${tag ? ` (${tag})` : ''}`,
     ].join('\n'),
     runUrl: `https://github.com/${config.owner}/${config.repo}/actions/workflows/${config.workflow}`,
+    config,
+    dispatchedAt,
   };
+}
+
+async function findDispatchedRun(config, dispatchedAt) {
+  const createdAfter = dispatchedAt.getTime() - 60_000;
+  const branch = encodeURIComponent(config.ref);
+  const runsUrl = `https://api.github.com/repos/${config.owner}/${config.repo}/actions/workflows/${config.workflow}/runs?event=workflow_dispatch&branch=${branch}&per_page=20`;
+
+  for (let attempt = 0; attempt < 24; attempt += 1) {
+    const data = await githubJson(config, runsUrl);
+    const run = (data.workflow_runs || [])
+      .filter(candidate => new Date(candidate.created_at).getTime() >= createdAfter)
+      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
+
+    if (run) return run;
+    await sleep(2500);
+  }
+
+  throw new Error('Workflow was dispatched, but no matching GitHub Actions run appeared within 60 seconds.');
+}
+
+async function waitForWorkflowRun(config, runId, send) {
+  const runUrl = `https://api.github.com/repos/${config.owner}/${config.repo}/actions/runs/${runId}`;
+  let lastStatus = '';
+
+  for (let attempt = 0; attempt < 240; attempt += 1) {
+    const run = await githubJson(config, runUrl);
+    const statusText = run.status === 'completed'
+      ? `completed (${run.conclusion || 'unknown'})`
+      : run.status;
+
+    if (statusText !== lastStatus) {
+      send({ type: 'output', stream: 'stdout', text: `Workflow run #${run.run_number} is ${statusText}.\n` });
+      lastStatus = statusText;
+    }
+
+    if (run.status === 'completed') return run;
+    await sleep(5000);
+  }
+
+  throw new Error(`Workflow run ${runId} did not finish within 20 minutes.`);
+}
+
+function normalizeCucumberStatus(status) {
+  if (status === 'passed') return 'passed';
+  if (status === 'failed' || status === 'ambiguous' || status === 'undefined') return 'failed';
+  if (status === 'skipped' || status === 'pending') return 'skipped';
+  return 'pending';
+}
+
+function parseCucumberJsonReport(reportJson, duration = '0s') {
+  const features = JSON.parse(reportJson);
+  const scenarios = [];
+  const metrics = {
+    passed: 0,
+    failed: 0,
+    skipped: 0,
+    total: 0,
+    scenarios,
+    duration,
+    confidence: 0,
+  };
+
+  for (const feature of features) {
+    for (const element of feature.elements || []) {
+      if (element.type && element.type !== 'scenario') continue;
+
+      const steps = (element.steps || [])
+        .filter(step => step.keyword && step.name)
+        .map(step => {
+          const status = normalizeCucumberStatus(step.result?.status);
+          if (status === 'passed') metrics.passed += 1;
+          if (status === 'failed') metrics.failed += 1;
+          if (status === 'skipped') metrics.skipped += 1;
+          if (['passed', 'failed', 'skipped'].includes(status)) metrics.total += 1;
+
+          return {
+            type: step.keyword.trim(),
+            text: step.name,
+            status,
+          };
+        });
+
+      const scenarioStatus = steps.some(step => step.status === 'failed')
+        ? 'failed'
+        : steps.length > 0 && steps.every(step => step.status === 'passed')
+          ? 'passed'
+          : steps.some(step => step.status === 'skipped')
+            ? 'skipped'
+            : 'pending';
+
+      scenarios.push({
+        name: element.name || 'Unnamed scenario',
+        steps,
+        status: scenarioStatus,
+      });
+    }
+  }
+
+  metrics.confidence = metrics.total === 0
+    ? 0
+    : Math.round((metrics.passed / metrics.total) * 100);
+
+  return metrics;
+}
+
+function progressFromMetrics(metrics) {
+  const completedSteps = metrics.passed + metrics.failed + metrics.skipped;
+  const totalSteps = metrics.total;
+
+  return {
+    completedSteps,
+    totalSteps,
+    failedSteps: metrics.failed,
+    skippedSteps: metrics.skipped,
+    percent: totalSteps === 0 ? 0 : Math.round((completedSteps / totalSteps) * 100),
+    scenarios: metrics.scenarios,
+  };
+}
+
+async function downloadCucumberMetrics(config, runId, duration) {
+  const artifactsUrl = `https://api.github.com/repos/${config.owner}/${config.repo}/actions/runs/${runId}/artifacts`;
+  let artifact = null;
+
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    const artifacts = await githubJson(config, artifactsUrl);
+    artifact = (artifacts.artifacts || []).find(item => item.name === 'cucumber-report');
+    if (artifact) break;
+    await sleep(2500);
+  }
+
+  if (!artifact) {
+    throw new Error('Workflow completed, but the cucumber-report artifact was not found.');
+  }
+
+  const archiveResponse = await fetch(artifact.archive_download_url, {
+    headers: githubHeaders(config),
+  });
+
+  if (!archiveResponse.ok) {
+    const details = await archiveResponse.text();
+    throw new Error(`Unable to download cucumber-report artifact (${archiveResponse.status}): ${details}`);
+  }
+
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cucumber-report-'));
+  const zipPath = path.join(tempDir, 'artifact.zip');
+
+  try {
+    fs.writeFileSync(zipPath, Buffer.from(await archiveResponse.arrayBuffer()));
+    const entries = execFileSync('unzip', ['-Z1', zipPath], { encoding: 'utf8' })
+      .split(/\r?\n/)
+      .filter(Boolean);
+    const jsonEntry = entries.find(entry => entry.endsWith('cucumber-report.json'));
+
+    if (!jsonEntry) {
+      throw new Error('cucumber-report artifact did not contain cucumber-report.json.');
+    }
+
+    const reportJson = execFileSync('unzip', ['-p', zipPath, jsonEntry], { encoding: 'utf8', maxBuffer: 20 * 1024 * 1024 });
+    return parseCucumberJsonReport(reportJson, duration);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
 }
 
 function parseTagExpression(tagExpression) {
@@ -357,21 +547,41 @@ app.post('/api/run-stream', async (req, res) => {
     const output = `${dispatch.message}\nRuns: ${dispatch.runUrl}`;
     outputChunks.push(output);
     send({ type: 'output', stream: 'stdout', text: `${output}\n` });
+
+    send({ type: 'output', stream: 'stdout', text: 'Waiting for GitHub Actions run to appear...\n' });
+    const run = await findDispatchedRun(dispatch.config, dispatch.dispatchedAt);
+    send({
+      type: 'output',
+      stream: 'stdout',
+      text: `Tracking run #${run.run_number}: ${run.html_url}\n`,
+    });
+
+    const completedRun = await waitForWorkflowRun(dispatch.config, run.id, send);
+    const started = completedRun.run_started_at ? new Date(completedRun.run_started_at).getTime() : 0;
+    const updated = completedRun.updated_at ? new Date(completedRun.updated_at).getTime() : 0;
+    const duration = started && updated && updated >= started
+      ? `${Math.round((updated - started) / 1000)}s`
+      : 'completed';
+
+    send({ type: 'output', stream: 'stdout', text: 'Downloading cucumber-report artifact...\n' });
+    const metrics = await downloadCucumberMetrics(dispatch.config, completedRun.id, duration);
+    const progress = progressFromMetrics(metrics);
+    send({ type: 'progress', progress });
+
     send({
       type: 'done',
-      success: true,
-      output,
-      runUrl: dispatch.runUrl,
-      metrics: {
-        passed: 0,
-        failed: 0,
-        skipped: 0,
-        total: 0,
-        scenarios: state.scenarios,
-        duration: 'queued',
-        confidence: 0,
-      },
-      progress: toProgressPayload(state),
+      success: completedRun.conclusion === 'success',
+      output: [
+        output,
+        `Run: ${completedRun.html_url}`,
+        `Conclusion: ${completedRun.conclusion || 'unknown'}`,
+        `Passed: ${metrics.passed}`,
+        `Failed: ${metrics.failed}`,
+        `Skipped: ${metrics.skipped}`,
+      ].join('\n'),
+      runUrl: completedRun.html_url,
+      metrics,
+      progress,
     });
     res.end();
   } catch (error) {
