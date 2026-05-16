@@ -40,3 +40,9 @@ Scenario: Dynamic Loading
    Then I click on the start button
    Then I can see the loading bar
    Then I can see the "Hello World!" text after loading is complete
+
+@regression @table
+Scenario: Handling Data Tables
+   Given I open the Data Tables page
+   When I can see the Data Tables page
+   Then I can see the email "jdoe@hotmail.com" for user having last name "Doe"
