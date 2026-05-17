@@ -1,4 +1,4 @@
-import { Page } from "@playwright/test";
+import { Locator, Page } from "@playwright/test";
 
 export class BasePage {
   constructor(protected page: Page) {}
@@ -10,5 +10,13 @@ export class BasePage {
   getFrame(frameName : string){
         return this.page.frameLocator(frameName)
 
+    }
+
+    async GetNewWindow(locator: Locator){
+      const [newPage] = await Promise.all([
+        this.page.waitForEvent('popup'),
+        locator.click()
+      ])
+      return newPage
     }
 }

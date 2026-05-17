@@ -14,6 +14,8 @@ import { DataTableService } from "../services/DataTableService";
 import { DataTablePage } from "../pages/DataTablePage";
 import { FramePage } from "../pages/FramePage";
 import { FrameService } from "../services/FrameService";
+import { WindowService } from "../services/WindowService";
+import { WindowPage } from "../pages/WindowPage";
 
 export class fixture extends World {
   page!: Page;
@@ -31,6 +33,8 @@ export class fixture extends World {
   dataTableService!: DataTableService;
   framePage!: FramePage;
   frameService!: FrameService;
+  windowPage!: WindowPage;
+  windowService!: WindowService;
 
   constructor(options: IWorldOptions) {
     super(options);
@@ -45,6 +49,7 @@ export class fixture extends World {
     this.loginPage = new LoginPage(this.page);
     this.dataTablePage = new DataTablePage(this.page);
     this.framePage = new FramePage(this.page);
+    this.windowPage = new WindowPage(this.page);
     // Initialize all services
     this.checkboxService = new CheckboxService(this.checkboxPage);
     this.dynamicLoadingService = new DynamicLoadingService(this.dynamicLoadingPage);
@@ -53,5 +58,6 @@ export class fixture extends World {
     this.loginService = new LoginService(this.loginPage);
     this.dataTableService = new DataTableService(this.dataTablePage);
     this.frameService = new FrameService(this.framePage);
+    this.windowService = new WindowService(this.windowPage);
   }
 }

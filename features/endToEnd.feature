@@ -52,3 +52,9 @@ Scenario: Handling Frames
    Given I open the Frames page
    When I can see the Frames page
    Then I can see the text "Your content" in the frame
+
+@regression @window
+Scenario: Handling Windows
+   Given I open the Windows page
+   When I can see the Windows page
+   Then I can see the new window with text "New Window" after I click on the Click Here link
