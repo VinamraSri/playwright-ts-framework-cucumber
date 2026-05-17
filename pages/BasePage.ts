@@ -6,4 +6,9 @@ export class BasePage {
   async goto(endPoint: string) {
     await this.page.goto(endPoint); // uses baseURL from config
   }
+
+  getFrame(frameName : string){
+        return this.page.frameLocator(frameName)
+
+    }
 }

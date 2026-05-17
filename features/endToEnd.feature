@@ -46,3 +46,9 @@ Scenario: Handling Data Tables
    Given I open the Data Tables page
    When I can see the Data Tables page
    Then I can see the email "jdoe@hotmail.com" for user having last name "Doe"
+
+@regression @frame
+Scenario: Handling Frames
+   Given I open the Frames page
+   When I can see the Frames page
+   Then I can see the text "Your content" in the frame
